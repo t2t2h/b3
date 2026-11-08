@@ -1,0 +1,44 @@
+name: Build dylib
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: brew install ldid make dpkg
+
+      - name: Install Theos
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
+
+      - name: Install iOS SDK
+        run: |
+          git clone --depth 1 https://github.com/theos/sdks.git $HOME/sdks
+          mkdir -p $HOME/theos/sdks
+          cp -R $HOME/sdks/iPhoneOS16.5.sdk $HOME/theos/sdks/ || cp -R $(ls -d $HOME/sdks/iPhoneOS*.sdk | tail -1) $HOME/theos/sdks/
+
+      - name: Build
+        run: make clean package FINALPACKAGE=1
+
+      - name: Collect dylib
+        run: |
+          mkdir -p out
+          cp .theos/obj/DomainSniffer.dylib out/ || find .theos -name "*.dylib" -exec cp {} out/ \;
+          cp packages/*.deb out/ || true
+          ls -la out
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DomainSniffer
+          path: out/*
